@@ -31,7 +31,11 @@ To get a quote every time you open a terminal, add `cliquote` to the end of your
     -o, --offline        Use the built-in quotes, no network
     -w, --width N        Output width (default: terminal width)
     -v, --verbose        Report sources that failed
+    -p, --pause          Wait for Enter before exiting
     -h, --help           Show this help
+
+On Windows, double-clicking `cliquote.rb` also works: the window stays open
+until you press Enter.
 
 ## Screenshot
 

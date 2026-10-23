@@ -140,8 +140,32 @@ module Cliquote
     ['', *body, '', author, ''].join("\n")
   end
 
+  # True when the program got a console window of its own, which on Windows
+  # means it was started by double-clicking the file. That window closes as
+  # soon as the program ends, so we wait for Enter before exiting.
+  # When run from an open cmd/PowerShell, the console is shared with the
+  # shell and this returns false.
+  def own_console_window?
+    return false unless Gem.win_platform?
+
+    require 'fiddle'
+    kernel32 = Fiddle.dlopen('kernel32')
+    get_list = Fiddle::Function.new(kernel32['GetConsoleProcessList'],
+                                    [Fiddle::TYPE_VOIDP, Fiddle::TYPE_LONG], Fiddle::TYPE_LONG)
+    get_list.call("\0" * 64, 16) == 1
+  rescue LoadError, StandardError
+    false
+  end
+
+  def wait_for_enter
+    print 'Press Enter to close...'
+    $stdin.gets
+  rescue StandardError
+    nil
+  end
+
   def parse_options(argv)
-    options = { sources: SOURCES.keys, width: nil, offline: false, verbose: false }
+    options = { sources: SOURCES.keys, width: nil, offline: false, verbose: false, pause: false }
     OptionParser.new do |opts|
       opts.banner = 'Usage: cliquote.rb [options]'
       opts.on('-s', '--source NAME', SOURCES.keys,
@@ -149,6 +173,7 @@ module Cliquote
       opts.on('-o', '--offline', 'Use the built-in quotes, no network') { options[:offline] = true }
       opts.on('-w', '--width N', Integer, 'Output width (default: terminal width)') { |w| options[:width] = w }
       opts.on('-v', '--verbose', 'Report sources that failed') { options[:verbose] = true }
+      opts.on('-p', '--pause', 'Wait for Enter before exiting') { options[:pause] = true }
       opts.on('-h', '--help', 'Show this help') do
         puts opts
         exit
@@ -158,6 +183,13 @@ module Cliquote
   end
 
   def run(argv)
+    pause = own_console_window? || argv.include?('-p') || argv.include?('--pause')
+    status = show_quote(argv)
+    wait_for_enter if pause
+    status
+  end
+
+  def show_quote(argv)
     options = parse_options(argv)
     quote, errors =
       if options[:offline]
@@ -176,6 +208,9 @@ module Cliquote
   rescue OptionParser::ParseError => e
     warn "cliquote: #{e.message} (see --help)"
     2
+  rescue StandardError => e
+    warn "cliquote: unexpected error: #{e.class}: #{e.message}"
+    1
   end
 end
 
